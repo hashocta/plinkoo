@@ -4,10 +4,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Canvas Game</title>
+  <title>Advanced Canvas Game</title>
   <style>
     canvas {
       background-color: #000;
+      display: block;
+      margin: 0 auto;
     }
 
     #add-ball {
@@ -15,172 +17,184 @@
       top: 10px;
       right: 10px;
       background-color: #0f0;
-      padding: 10px;  
+      color: #000;
+      border: none;
+      padding: 10px 15px;
+      font-size: 16px;
       cursor: pointer;
+      border-radius: 5px;
+    }
+
+    #add-ball:hover {
+      background-color: #0c0;
     }
   </style>
 </head>
 
 <body>
-  <canvas id="gameCanvas" width="800" height="800"></canvas>
-  <div id="add-ball">Add Ball</div>
+  <canvas id="gameCanvas"></canvas>
+  <button id="add-ball">Add Ball</button>
   <script>
+    // Configuration and Constants
+    const CONFIG = {
+      width: 800,
+      height: 800,
+      ballRadius: 7,
+      obstacleRadius: 4,
+      gravity: 0.2,
+      horizontalFriction: 0.4,
+      verticalFriction: 0.8,
+      frameRate: 60,
+      sinkWidth: 36,
+      numSinks: 15,
+      obstacleSpacing: 36,
+      rows: 16
+    };
+
     const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d'); // createCircle, createRectangle, createTriangle, createLine
+    const ctx = canvas.getContext('2d');
+    canvas.width = CONFIG.width;
+    canvas.height = CONFIG.height;
 
-    const DECIMAL_MULTIPLIER = 10000;
-
-    const WIDTH = 800;
-    const HEIGHT = 800;
-    const ballRadius = 7;
-    const obstacleRadius = 4;
-    const gravity = pad(0.2);
-    const horizontalFriction = 0.4;
-    const verticalFriction = 0.8;
-    let balls = [];
-
+    const balls = [];
     const obstacles = [];
     const sinks = [];
 
-    function pad(n) {
-      return n * DECIMAL_MULTIPLIER;
-    }
+    // Utility Functions
+    const randomColor = () => `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`;
+    const distance = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
 
-    function unpad(n) {
-      return Math.floor(n / DECIMAL_MULTIPLIER);
-    }
-
-    // Create obstacles in a pyramid shape
-    const rows = 16;
-    for (let row = 2; row < rows; row++) {
-      const numObstacles = row + 1;// 3
-      const y = 0 + row * 35;
-      const spacing = 36;
+    // Create Obstacles (Pyramid Shape)
+    for (let row = 2; row < CONFIG.rows; row++) {
+      const numObstacles = row + 1;
+      const y = row * CONFIG.obstacleSpacing;
       for (let col = 0; col < numObstacles; col++) {
-        const x = WIDTH / 2 - spacing * (row / 2 - col);
-        obstacles.push({ x: pad(x), y: pad(y), radius: obstacleRadius });
+        const x = CONFIG.width / 2 - CONFIG.obstacleSpacing * (row / 2 - col);
+        obstacles.push({ x, y, radius: CONFIG.obstacleRadius });
       }
     }
 
-    // Create sinks at the bottom as rectangles
-    const sinkWidth = 36;
-    const NUM_SINKS = 15
-    for (let i = 0; i < NUM_SINKS; i++) {
-      const x = WIDTH / 2 + (i - 7.5) * (sinkWidth) + obstacleRadius;
-      const y = HEIGHT - 240;
-      const width = sinkWidth;
-      const height = width;
-      sinks.push({ x, y, width, height });
+    // Create Sinks (Bottom Rectangles)
+    for (let i = 0; i < CONFIG.numSinks; i++) {
+      const x = CONFIG.width / 2 + (i - CONFIG.numSinks / 2) * CONFIG.sinkWidth;
+      const y = CONFIG.height - 40;
+      sinks.push({ x, y, width: CONFIG.sinkWidth, height: CONFIG.sinkWidth });
     }
 
-
-
-
-
-
+    // Ball Class
     class Ball {
       constructor(x, y, radius, color) {
         this.x = x;
         this.y = y;
         this.radius = radius;
         this.color = color;
-        this.vx = 0;
+        this.vx = (Math.random() - 0.5) * 2;
         this.vy = 0;
       }
 
       draw() {
         ctx.beginPath();
-        ctx.arc(unpad(this.x), unpad(this.y), this.radius, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fillStyle = this.color;
         ctx.fill();
         ctx.closePath();
       }
-      
+
       update() {
-        // change the velocity, change the positions
-        this.vy = this.vy + gravity;
-        this.x += this.vx; // x = x1 + v
+        // Apply gravity
+        this.vy += CONFIG.gravity;
+
+        // Update position
+        this.x += this.vx;
         this.y += this.vy;
 
         // Collision with obstacles
         obstacles.forEach(obstacle => {
-          const dist = Math.hypot(this.x - obstacle.x, this.y - obstacle.y);
-          if (dist < pad(this.radius + obstacle.radius)) {
-            // Calculate collision angle
+          const dist = distance(this.x, this.y, obstacle.x, obstacle.y);
+          if (dist < this.radius + obstacle.radius) {
             const angle = Math.atan2(this.y - obstacle.y, this.x - obstacle.x);
-            // Reflect velocity
-            const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-            this.vx = (Math.cos(angle) * speed * horizontalFriction);
-            this.vy = Math.sin(angle) * speed * verticalFriction;
+            const speed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
+            this.vx = Math.cos(angle) * speed * CONFIG.horizontalFriction;
+            this.vy = Math.sin(angle) * speed * CONFIG.verticalFriction;
 
-            // Adjust position to prevent sticking
-            const overlap = this.radius + obstacle.radius - unpad(dist);
-            this.x += pad(Math.cos(angle) * overlap);
-            this.y += pad(Math.sin(angle) * overlap);
+            // Adjust position to prevent overlap
+            const overlap = this.radius + obstacle.radius - dist;
+            this.x += Math.cos(angle) * overlap;
+            this.y += Math.sin(angle) * overlap;
           }
         });
 
         // Collision with sinks
         sinks.forEach(sink => {
           if (
-            unpad(this.x) > sink.x - sink.width / 2 &&
-            unpad(this.x) < sink.x + sink.width / 2 &&
-            unpad(this.y) + this.radius > sink.y - sink.height / 2
+            this.x > sink.x - sink.width / 2 &&
+            this.x < sink.x + sink.width / 2 &&
+            this.y + this.radius > sink.y
           ) {
             this.vx = 0;
             this.vy = 0;
+            this.y = sink.y - this.radius; // Rest on sink
           }
         });
+
+        // Boundary collisions
+        if (this.x - this.radius < 0 || this.x + this.radius > CONFIG.width) {
+          this.vx *= -CONFIG.horizontalFriction;
+          this.x = Math.max(this.radius, Math.min(this.x, CONFIG.width - this.radius));
+        }
+        if (this.y - this.radius < 0 || this.y + this.radius > CONFIG.height) {
+          this.vy *= -CONFIG.verticalFriction;
+          this.y = Math.max(this.radius, Math.min(this.y, CONFIG.height - this.radius));
+        }
       }
     }
 
-
-
-
-    const initialBall = new Ball(pad(WIDTH / 2 + 23), pad(50), ballRadius, 'red');
-    balls.push(initialBall);
-
+    // Draw Obstacles
     function drawObstacles() {
       ctx.fillStyle = 'white';
       obstacles.forEach(obstacle => {
         ctx.beginPath();
-        ctx.arc(unpad(obstacle.x), unpad(obstacle.y), obstacle.radius, 0, Math.PI * 2);
+        ctx.arc(obstacle.x, obstacle.y, obstacle.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.closePath();
       });
     }
 
+    // Draw Sinks
     function drawSinks() {
       ctx.fillStyle = 'green';
-      for (let i = 0; i<sinks.length; i++)  {
-        const sink = sinks[i];
-        ctx.fillRect(sink.x, sink.y - sink.height / 2, sink.width - obstacleRadius * 2, sink.height);
-      };
+      sinks.forEach(sink => {
+        ctx.fillRect(sink.x - sink.width / 2, sink.y, sink.width, sink.height);
+      });
     }
 
+    // Add a Ball
     function addBall() {
-      const newBall = new Ball(pad(WIDTH / 2 + 13), pad(50), ballRadius, 'red');
+      const newBall = new Ball(CONFIG.width / 2, 50, CONFIG.ballRadius, randomColor());
       balls.push(newBall);
     }
 
     document.getElementById('add-ball').addEventListener('click', addBall);
 
-    function draw() {
-      ctx.clearRect(0, 0, WIDTH, HEIGHT);
-      drawObstacles();
-      drawSinks();
-      balls.forEach(ball => {
-        ball.draw();
-        ball.update();
-      });
+    // Game Loop
+    let lastTime = 0;
+    function gameLoop(time) {
+      const deltaTime = time - lastTime;
+      if (deltaTime >= 1000 / CONFIG.frameRate) {
+        ctx.clearRect(0, 0, CONFIG.width, CONFIG.height);
+        drawObstacles();
+        drawSinks();
+        balls.forEach(ball => {
+          ball.draw();
+          ball.update();
+        });
+        lastTime = time;
+      }
+      requestAnimationFrame(gameLoop);
     }
 
-    function update() {
-      draw();
-      requestAnimationFrame(update);
-    }
-
-    update();
+    // Start the Game
+    gameLoop(0);
   </script>
 </body>
 
